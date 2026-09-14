@@ -30,7 +30,8 @@ jobs:
 
       - name: Build apk-tools v3
         run: |
-          git clone --depth 1 --branch v3.0.8 https://gitlab.alpinelinux.org/alpine/apk-tools.git "$HOME/apk-tools"
+          # GitLab often returns 418 to GitHub-hosted runners; use the GitHub mirror.
+          git clone --depth 1 --branch v3.0.8 https://github.com/alpinelinux/apk-tools.git "$HOME/apk-tools"
           meson setup "$HOME/apk-tools/build" "$HOME/apk-tools" -Ddocs=disabled -Dhelp=false
           ninja -C "$HOME/apk-tools/build" src/apk
           echo "$HOME/apk-tools/build/src" >> "$GITHUB_PATH"
