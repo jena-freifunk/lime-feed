@@ -16,6 +16,9 @@ PKG_NAME="ffj-onboard"
 PKG_VER="${VERSION}-r${RELEASE}"
 APK_NAME="${PKG_NAME}-${PKG_VER}.apk"
 DEPENDS="lime-system ubus-lime-location luci-lib-jsonc libuci-lua libubus-lua uhttpd rpcd"
+# EC private key (PEM); packages stay unsigned when absent.
+SIGN_KEY="${FFJ_FEED_KEY:-$ROOT/keys/feed.pem}"
+[ -f "$SIGN_KEY" ] || SIGN_KEY=""
 
 TMP="$(mktemp -d)"
 cleanup() { rm -rf "$TMP"; }
@@ -72,7 +75,8 @@ rm -f "$APK_PATH"
 
 cat >"$TMP/mkpkg.sh" <<EOF
 #!/bin/sh
-exec "$APK" mkpkg \\
+# --sign-key is a global apk option and must precede the sub-command.
+exec "$APK" ${SIGN_KEY:+--sign-key "$SIGN_KEY"} mkpkg \\
   --info "name:${PKG_NAME}" \\
   --info "version:${PKG_VER}" \\
   --info "description:Freifunk Jena node onboard wizard (hostname, shared root password, location)" \\

@@ -67,7 +67,14 @@ apk add --allow-untrusted /tmp/ffj-onboard-0.1.0-r1.apk
 /etc/init.d/rpcd restart
 ```
 
-`--allow-untrusted` is required until the feed is signed with a key already in `/etc/apk/keys` on the firmware.
+`--allow-untrusted` is required until [`keys/feed.pub.pem`](keys/feed.pub.pem) is in `/etc/apk/keys` on the firmware. When `keys/feed.pem` exists (or `FFJ_FEED_KEY` points at it), `build-apk.sh` and `build-feed.sh` sign the `.apk` and `packages.adb` with it.
+
+Check what a node would check:
+
+```sh
+# --keys-dir is resolved against --root, so it must be an absolute path.
+apk --keys-dir "$PWD/keys" verify dist/feed/packages.adb dist/feed/*.apk
+```
 
 If `apk` on the build host fails with `libapk.so.3.0.0: cannot open shared object file`, point it at the meson build dir:
 
@@ -143,7 +150,7 @@ GitHub Pages for this repo is:
 
 1. Enable **Pages** on [mmdevapp/lime-feed-ffj](https://github.com/mmdevapp/lime-feed-ffj) (source: GitHub Actions).
 2. Workflow [`.github/workflows/pages-feed.yml`](.github/workflows/pages-feed.yml) builds `dist/feed` and deploys it.
-3. Optional: `./scripts/gen-feed-keys.sh` and store the **private** key as Actions secret `FFJ_FEED_PRIV`; commit `keys/feed.pub.pem` (apk) and/or `keys/feed.pub` (usign). Never commit `keys/feed.pem` / `keys/feed.priv`.
+3. Signing: `./scripts/gen-feed-keys.sh`, store the **private** key (`keys/feed.pem`) as Actions secret `FFJ_FEED_PRIV`, and commit `keys/feed.pub.pem`. CI writes the secret back to `keys/feed.pem`, signs the `.apk` plus `packages.adb`, and fails the run if `apk verify` rejects them. Without the secret the feed is published unsigned. Never commit `keys/feed.pem`.
 4. For LibreMesh ASU (`packages.adb`): rebuild the feed with the OpenWrt/`apk` toolchain so `packages.adb` is present on Pages (see `FEED.txt` if missing after a plain CI run).
 5. In the firmware selector [`www/config.js`](../freifunk-jena-firmware-selecctor/www/config.js):
 

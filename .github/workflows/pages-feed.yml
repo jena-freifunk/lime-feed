@@ -38,30 +38,35 @@ jobs:
           echo "LD_LIBRARY_PATH=$HOME/apk-tools/build/src" >> "$GITHUB_ENV"
           echo "APK_LIBDIR=$HOME/apk-tools/build/src" >> "$GITHUB_ENV"
 
+      - name: Install feed signing key
+        env:
+          FFJ_FEED_PRIV: ${{ secrets.FFJ_FEED_PRIV }}
+        run: |
+          if [ -z "${FFJ_FEED_PRIV:-}" ]; then
+            echo "No FFJ_FEED_PRIV secret — publishing unsigned feed"
+            exit 0
+          fi
+          install -d -m 700 keys
+          printf '%s\n' "$FFJ_FEED_PRIV" > keys/feed.pem
+          chmod 600 keys/feed.pem
+          openssl ec -in keys/feed.pem -noout
+          echo "FFJ_FEED_KEY=$PWD/keys/feed.pem" >> "$GITHUB_ENV"
+
       - name: Build feed
         run: |
           chmod +x scripts/*.sh
           ./scripts/build-feed.sh dist/feed
 
-      - name: Sign Packages (optional)
-        env:
-          FFJ_FEED_PRIV: ${{ secrets.FFJ_FEED_PRIV }}
+      - name: Verify feed signatures
         run: |
-          if [ -n "${FFJ_FEED_PRIV:-}" ]; then
-            printf '%s\n' "$FFJ_FEED_PRIV" > keys/feed.priv
-            chmod 600 keys/feed.priv
-            if command -v usign >/dev/null 2>&1 || sudo apt-get install -y signify-openbsd; then
-              true
-            fi
-            # usign package name varies; skip soft-fail
-            if command -v usign >/dev/null 2>&1; then
-              usign -S -m dist/feed/Packages -s keys/feed.priv -x dist/feed/Packages.sig
-            else
-              echo "usign not available — published unsigned Packages index"
-            fi
-          else
-            echo "No FFJ_FEED_PRIV secret — publishing unsigned feed"
+          if [ -z "${FFJ_FEED_KEY:-}" ]; then
+            echo "Unsigned feed — nothing to verify"
+            exit 0
           fi
+          # apk trusts every file in --keys-dir, so expose the public key alone.
+          keys_dir="$(mktemp -d)"
+          openssl ec -in "$FFJ_FEED_KEY" -pubout -out "$keys_dir/feed.pub.pem"
+          apk --keys-dir "$keys_dir" verify dist/feed/packages.adb dist/feed/*.apk
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

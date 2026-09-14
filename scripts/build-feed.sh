@@ -9,6 +9,9 @@ VERSION="${FFJ_ONBOARD_VERSION:-0.1.0}"
 RELEASE="${FFJ_ONBOARD_RELEASE:-1}"
 IPK_VER="${VERSION}-${RELEASE}"
 APK_VER="${VERSION}-r${RELEASE}"
+# EC private key (PEM); the index stays unsigned when absent.
+SIGN_KEY="${FFJ_FEED_KEY:-$ROOT/keys/feed.pem}"
+[ -f "$SIGN_KEY" ] || SIGN_KEY=""
 
 "$ROOT/scripts/build-ipk.sh" "$ROOT/dist"
 "$ROOT/scripts/build-apk.sh" "$ROOT/dist"
@@ -40,7 +43,8 @@ gzip -9c "$OUT/Packages" > "$OUT/Packages.gz"
 if host_apk; then
   (
     cd "$OUT"
-    "$APK" mkndx --allow-untrusted -o packages.adb ./*.apk
+    # --allow-untrusted / --sign-key are global options and must precede mkndx.
+    "$APK" --allow-untrusted ${SIGN_KEY:+--sign-key "$SIGN_KEY"} mkndx -o packages.adb ./*.apk
   )
   rm -f "$OUT/FEED.txt"
 fi
