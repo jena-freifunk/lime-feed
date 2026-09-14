@@ -1,0 +1,6 @@
+dist/
+keys/feed.priv
+keys/feed.pem
+*.ipk
+*.apk
+.DS_Store

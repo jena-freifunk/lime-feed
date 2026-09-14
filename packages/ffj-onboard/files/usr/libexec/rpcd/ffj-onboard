@@ -1,0 +1,128 @@
+#!/usr/bin/env lua
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+-- Freifunk Jena onboard: hostname, shared root password, location
+
+local json = require "luci.jsonc"
+local utils = require "lime.utils"
+local config = require "lime.config"
+local location = require "lime.location"
+
+local DONE_OPTION = "ffj_onboard_done"
+local PREV_INDEX_OPTION = "ffj_onboard_prev_index"
+local LIME_APP_INDEX = "lime_app_index.html"
+
+local function is_done()
+	local v = config.get("system", DONE_OPTION, "0")
+	return v == "1" or v == "true" or v == true
+end
+
+local function mark_done(uci_cursor)
+	uci_cursor:set(config.UCI_NODE_NAME, "system", DONE_OPTION, "1")
+end
+
+--! Hand "/" back to whatever served it before onboarding (LimeApp by default).
+local function restore_index_page(uci_cursor)
+	local prev = uci_cursor:get(config.UCI_NODE_NAME, "system", PREV_INDEX_OPTION)
+	uci_cursor:set("uhttpd", "main", "index_page", prev or LIME_APP_INDEX)
+	uci_cursor:commit("uhttpd")
+end
+
+local function valid_hostname(name)
+	if type(name) ~= "string" then
+		return false
+	end
+	if #name < 1 or #name > 63 then
+		return false
+	end
+	-- allow FQDN-ish names used by Jena (labels + dots)
+	return name:match("^[A-Za-z0-9][A-Za-z0-9%-%.]*[A-Za-z0-9]$") ~= nil
+		or name:match("^[A-Za-z0-9]$") ~= nil
+end
+
+local function valid_coord(v)
+	local n = tonumber(v)
+	return n ~= nil and n == n
+end
+
+local function status(_)
+	local hostname = config.get("system", "hostname", utils.hostname())
+	utils.printJson({
+		status = "ok",
+		done = is_done(),
+		hostname = hostname,
+	})
+end
+
+local function complete(msg)
+	if is_done() then
+		utils.printJson({ status = "error", msg = "onboard already completed" })
+		return
+	end
+
+	local hostname = msg.hostname
+	local password = msg.password
+	local lat = msg.lat
+	local lon = msg.lon
+
+	if not valid_hostname(hostname) then
+		utils.printJson({ status = "error", msg = "invalid hostname" })
+		return
+	end
+	if type(password) ~= "string" or #password < 8 then
+		utils.printJson({ status = "error", msg = "password must be at least 8 characters" })
+		return
+	end
+	if not valid_coord(lat) or not valid_coord(lon) then
+		utils.printJson({ status = "error", msg = "invalid lat/lon" })
+		return
+	end
+
+	local lat_n = tonumber(lat)
+	local lon_n = tonumber(lon)
+	if lat_n < -90 or lat_n > 90 or lon_n < -180 or lon_n > 180 then
+		utils.printJson({ status = "error", msg = "lat/lon out of range" })
+		return
+	end
+
+	-- Same as first-boot-wizard create_network
+	utils.set_shared_root_password(password)
+
+	local uci_cursor = config.get_uci_cursor()
+	uci_cursor:commit("lime-community")
+	uci_cursor:set(config.UCI_NODE_NAME, "system", "hostname", hostname)
+	mark_done(uci_cursor)
+	uci_cursor:commit(config.UCI_NODE_NAME)
+	restore_index_page(uci_cursor)
+
+	location.set(tostring(lat_n), tostring(lon_n))
+
+	os.execute("/usr/bin/lime-config >/dev/null 2>&1")
+
+	utils.printJson({ status = "done", reboot = true })
+	-- Reboot shortly after response so ubus can return
+	os.execute("(sleep 2; reboot) >/dev/null 2>&1 &")
+end
+
+local methods = {
+	status = { no_params = 0 },
+	complete = {
+		hostname = "str",
+		password = "str",
+		lat = "str",
+		lon = "str",
+	},
+}
+
+if arg[1] == "list" then
+	utils.printJson(methods)
+elseif arg[1] == "call" then
+	local raw = utils.rpcd_readline()
+	local msg = json.parse(raw) or {}
+	if arg[2] == "status" then
+		status(msg)
+	elseif arg[2] == "complete" then
+		complete(msg)
+	else
+		utils.printJson({ error = "Method not found" })
+	end
+end

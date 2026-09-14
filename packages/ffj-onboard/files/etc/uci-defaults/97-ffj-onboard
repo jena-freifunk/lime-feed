@@ -1,0 +1,27 @@
+#!/bin/sh
+# Initialize onboard gate without wiping existing lime-node system options.
+# Numbered after 96-lime-app-index_page so "/" lands on the wizard, not LimeApp.
+
+ONBOARD_INDEX='ffj_onboard_index.html'
+
+[ -f /etc/config/lime-node ] || touch /etc/config/lime-node
+
+if ! uci -q get lime-node.system >/dev/null; then
+	uci set lime-node.system=lime
+fi
+
+# Do not reset if already completed (e.g. package reinstall)
+[ "$(uci -q get lime-node.system.ffj_onboard_done)" = "1" ] && exit 0
+
+uci set lime-node.system.ffj_onboard_done='0'
+
+prev_index="$(uci -q get uhttpd.main.index_page)"
+if [ -n "$prev_index" ] && [ "$prev_index" != "$ONBOARD_INDEX" ]; then
+	uci set lime-node.system.ffj_onboard_prev_index="$prev_index"
+fi
+uci set uhttpd.main.index_page="$ONBOARD_INDEX"
+
+uci commit lime-node
+uci commit uhttpd
+
+exit 0

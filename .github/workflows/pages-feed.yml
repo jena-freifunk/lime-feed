@@ -1,0 +1,79 @@
+name: pages-feed
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-feed
+  cancel-in-progress: true
+
+jobs:
+  build-feed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils gzip meson ninja-build pkg-config \
+            zlib1g-dev libssl-dev libzstd-dev lua5.4-dev fakeroot
+
+      - name: Build apk-tools v3
+        run: |
+          git clone --depth 1 --branch v3.0.8 https://gitlab.alpinelinux.org/alpine/apk-tools.git "$HOME/apk-tools"
+          meson setup "$HOME/apk-tools/build" "$HOME/apk-tools" -Ddocs=disabled -Dhelp=false
+          ninja -C "$HOME/apk-tools/build" src/apk
+          echo "$HOME/apk-tools/build/src" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$HOME/apk-tools/build/src" >> "$GITHUB_ENV"
+          echo "APK_LIBDIR=$HOME/apk-tools/build/src" >> "$GITHUB_ENV"
+
+      - name: Build feed
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/build-feed.sh dist/feed
+
+      - name: Sign Packages (optional)
+        env:
+          FFJ_FEED_PRIV: ${{ secrets.FFJ_FEED_PRIV }}
+        run: |
+          if [ -n "${FFJ_FEED_PRIV:-}" ]; then
+            printf '%s\n' "$FFJ_FEED_PRIV" > keys/feed.priv
+            chmod 600 keys/feed.priv
+            if command -v usign >/dev/null 2>&1 || sudo apt-get install -y signify-openbsd; then
+              true
+            fi
+            # usign package name varies; skip soft-fail
+            if command -v usign >/dev/null 2>&1; then
+              usign -S -m dist/feed/Packages -s keys/feed.priv -x dist/feed/Packages.sig
+            else
+              echo "usign not available — published unsigned Packages index"
+            fi
+          else
+            echo "No FFJ_FEED_PRIV secret — publishing unsigned feed"
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/feed
+
+  deploy:
+    needs: build-feed
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

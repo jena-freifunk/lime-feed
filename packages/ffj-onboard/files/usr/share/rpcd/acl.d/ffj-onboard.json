@@ -1,0 +1,28 @@
+{
+	"unauthenticated": {
+		"description": "FFJ onboard wizard before shared root password is set (open LAN trust model, same as FBW)",
+		"read": {
+			"ubus": {
+				"ffj-onboard": ["status"]
+			}
+		},
+		"write": {
+			"ubus": {
+				"ffj-onboard": ["complete"]
+			}
+		}
+	},
+	"root": {
+		"description": "FFJ onboard full access",
+		"read": {
+			"ubus": {
+				"ffj-onboard": ["*"]
+			}
+		},
+		"write": {
+			"ubus": {
+				"ffj-onboard": ["*"]
+			}
+		}
+	}
+}

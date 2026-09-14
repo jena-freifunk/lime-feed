@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Freifunk Jena – Node Setup</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Freifunk Jena</h1>
+    <p class="lead">Node einrichten / Set up this node</p>
+
+    <p id="status-msg" class="msg" hidden></p>
+
+    <form id="onboard-form" autocomplete="off">
+      <label>
+        Hostname
+        <input id="hostname" name="hostname" type="text" required maxlength="63"
+          pattern="[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]|[A-Za-z0-9]"
+          placeholder="ost-feste-mitte" />
+      </label>
+
+      <label>
+        Passwort (shared root) / Password
+        <input id="password" name="password" type="password" required minlength="8" />
+      </label>
+
+      <label>
+        Passwort wiederholen / Confirm
+        <input id="password2" name="password2" type="password" required minlength="8" />
+      </label>
+
+      <fieldset>
+        <legend>Standort / Location</legend>
+
+        <label for="place-query">Adresse suchen / Search address</label>
+        <div class="search-row">
+          <input id="place-query" type="search" autocomplete="off" placeholder="Jena, Löbdergraben 12" />
+          <button type="button" id="search-btn" class="secondary">Suchen / Search</button>
+        </div>
+        <ul id="search-results" class="results" hidden></ul>
+
+        <div id="map" class="map" role="application" aria-label="Karte / Map" hidden></div>
+
+        <div class="row">
+          <label>
+            Latitude
+            <input id="lat" name="lat" type="number" step="any" required placeholder="50.927" />
+          </label>
+          <label>
+            Longitude
+            <input id="lon" name="lon" type="number" step="any" required placeholder="11.589" />
+          </label>
+        </div>
+        <button type="button" id="geo-btn" class="secondary">Standort vom Gerät / Use device location</button>
+      </fieldset>
+
+      <button type="submit" id="submit-btn">Speichern &amp; Neustart / Save &amp; reboot</button>
+    </form>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
