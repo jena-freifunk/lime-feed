@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Build an OpenWrt .ipk for ffj-onboard (PKGARCH=all) without a full SDK.
 set -euo pipefail
 

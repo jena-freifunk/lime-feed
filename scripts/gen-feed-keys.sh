@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Generate usign keypair for the package feed (do not commit feed.priv).
 set -euo pipefail
 

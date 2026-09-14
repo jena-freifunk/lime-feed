@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Build an OpenWrt/LibreMesh .apk for ffj-onboard (PKGARCH=all) with apk mkpkg.
 set -euo pipefail
 

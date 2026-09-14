@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Build package + static feed tree suitable for GitHub Pages.
 # Produces dist/feed/ with .ipk, .apk, Packages, Packages.gz, and packages.adb when apk is available.
 set -euo pipefail
