@@ -3,8 +3,6 @@
 Freifunk Jena package feed for LibreMesh: package sources plus the tooling that publishes
 them as a binary feed on GitHub Pages (`.apk` + `packages.adb`).
 
-Repository: [mmdevapp/lime-feed-ffj](https://github.com/mmdevapp/lime-feed-ffj).
-
 Packages in this feed:
 
 - **`ffj-community`** — Jena community profile: `/etc/config/lime-community` (hostname
