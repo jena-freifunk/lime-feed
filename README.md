@@ -7,9 +7,12 @@ Repository: [mmdevapp/lime-feed-ffj](https://github.com/mmdevapp/lime-feed-ffj).
 
 Packages in this feed:
 
+- **`ffj-community`** — Jena community profile: `/etc/config/lime-community` (hostname
+  domain, IPv4/IPv6, WiFi SSID) and community SSH keys in `/etc/dropbear/authorized_keys`.
+  First boot runs `lime-config` via `80-ffj-community`.
 - **`ffj-onboard`** — onboard wizard: set **hostname**, **shared root password** (same
   mechanism as First Boot Wizard), and **map location** when `lime-community` is already
-  preconfigured (e.g. via firmware-selector `uci-defaults`).
+  preconfigured (install `ffj-community` in the image).
 
 ## ffj-onboard on the node
 
@@ -41,6 +44,12 @@ Security note: `status` / `complete` are allowed for the **unauthenticated** rpc
 ## Package layout
 
 ```text
+packages/ffj-community/
+  Makefile
+  files/
+    etc/config/lime-community
+    etc/dropbear/authorized_keys
+    etc/uci-defaults/80-ffj-community
 packages/ffj-onboard/
   Makefile
   files/
@@ -55,15 +64,15 @@ packages/ffj-onboard/
 
 ```sh
 chmod +x scripts/*.sh
-./scripts/build-apk.sh          # → dist/ffj-onboard-0.1.0-r1.apk  (needs apk-tools v3)
-./scripts/build-ipk.sh          # → dist/ffj-onboard_0.1.0-1_all.ipk  (opkg images only)
+./scripts/build-apk.sh          # → dist/*.apk  (needs apk-tools v3)
+./scripts/build-ipk.sh          # → dist/*.ipk  (opkg images only)
 ./scripts/build-feed.sh         # → dist/feed/ (.apk, packages.adb, Packages, .ipk)
 ```
 
 Current LibreMesh/OpenWrt images use **apk**, not opkg. Copy the `.apk` to the node:
 
 ```sh
-apk add --allow-untrusted /tmp/ffj-onboard-0.1.0-r1.apk
+apk add --allow-untrusted /tmp/ffj-community-0.1.0-r1.apk /tmp/ffj-onboard-0.1.0-r1.apk
 /etc/init.d/rpcd restart
 ```
 
@@ -99,8 +108,8 @@ Then:
 
 ```sh
 ./scripts/feeds update ffj
-./scripts/feeds install ffj-onboard
-make package/ffj-onboard/compile
+./scripts/feeds install ffj-community ffj-onboard
+make package/ffj-community/compile package/ffj-onboard/compile
 ```
 
 `src-link` / `src-git` is unsigned source. Do not put the feed public key in `feeds.conf`.
@@ -165,7 +174,7 @@ asu_repository_keys: [
 ],
 ```
 
-Flavor `ffjnovpn` already lists `"ffj-onboard"` (and not `first-boot-wizard`).
+Flavors `default` and `ffjnovpn` list `"ffj-community"` and `"ffj-onboard"`.
 
 ## Access URL
 

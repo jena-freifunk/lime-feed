@@ -1,0 +1,4 @@
+#!/bin/sh
+# Apply community profile now that /etc/config/lime-community is in the image.
+[ -x /usr/bin/lime-config ] && lime-config
+exit 0

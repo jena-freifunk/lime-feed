@@ -1,0 +1,14 @@
+config lime 'system'
+	option hostname '%M4%M5%M6.jena.freifunk.net'
+	option domain 'jena.freifunk.net'
+	option keep_on_upgrade 'libremesh base-files-essential /etc/sysupgrade.conf'
+
+config lime 'network'
+	# IPv4: /16 community subnet, node IPs auto-assigned in /17 (10.17.128.0–10.17.255.254)
+	option main_ipv4_address '10.17.0.0/16/17'
+	# IPv6 ULA; host bits filled from MAC (anygw uses the same prefix)
+	option main_ipv6_address 'fd59:b1b7:1d1f::/64'
+
+config lime 'wifi'
+	option ap_ssid 'jena.freifunk.net'
+	option apname_ssid 'jena.freifunk.net/%H'

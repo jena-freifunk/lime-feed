@@ -1,43 +1,48 @@
 #!/usr/bin/env bash
-# Build an OpenWrt/LibreMesh .apk for ffj-onboard (PKGARCH=all) with apk mkpkg.
+# Build OpenWrt/LibreMesh .apk packages (PKGARCH=all) with apk mkpkg.
 set -euo pipefail
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 # shellcheck source=host-apk.sh
 . "$ROOT/scripts/host-apk.sh"
+# shellcheck source=load-pkg.sh
+. "$ROOT/scripts/load-pkg.sh"
 host_apk
 
-FILES="$ROOT/packages/ffj-onboard/files"
-VERSION="${FFJ_ONBOARD_VERSION:-0.1.0}"
-RELEASE="${FFJ_ONBOARD_RELEASE:-1}"
 OUT_DIR="${1:-$ROOT/dist}"
-PKG_NAME="ffj-onboard"
-# apk-tools requires -rN for PKG_RELEASE (OpenWrt: 0.1.0-r1, not 0.1.0-1)
-PKG_VER="${VERSION}-r${RELEASE}"
-APK_NAME="${PKG_NAME}-${PKG_VER}.apk"
-DEPENDS="lime-system ubus-lime-location luci-lib-jsonc libuci-lua libubus-lua uhttpd rpcd"
-# EC private key (PEM); packages stay unsigned when absent.
 SIGN_KEY="${FFJ_FEED_KEY:-$ROOT/keys/feed.pem}"
 [ -f "$SIGN_KEY" ] || SIGN_KEY=""
 
-TMP="$(mktemp -d)"
-cleanup() { rm -rf "$TMP"; }
-trap cleanup EXIT
+build_apk() {
+  local pkg_dir="$1"
+  load_pkg_makefile "$pkg_dir/Makefile"
+  local files="$pkg_dir/files"
+  local pkg_ver="${PKG_VERSION}-r${PKG_RELEASE}"
+  local apk_name="${PKG_NAME}-${pkg_ver}.apk"
 
-ROOTFS="$TMP/root"
-SCRIPTS="$TMP/scripts"
-mkdir -p "$ROOTFS" "$SCRIPTS" "$OUT_DIR" "$ROOTFS/lib/apk/packages"
+  local tmp rootfs scripts
+  tmp="$(mktemp -d)"
+  rootfs="$tmp/root"
+  scripts="$tmp/scripts"
+  mkdir -p "$rootfs" "$scripts" "$OUT_DIR" "$rootfs/lib/apk/packages"
 
-cp -a "$FILES"/. "$ROOTFS/"
-chmod 0755 "$ROOTFS/usr/libexec/rpcd/ffj-onboard"
-chmod 0755 "$ROOTFS/etc/uci-defaults/97-ffj-onboard"
+  cp -a "$files"/. "$rootfs/"
+  if [ -d "$rootfs/etc/uci-defaults" ]; then
+    find "$rootfs/etc/uci-defaults" -type f -exec chmod 0755 {} +
+  fi
+  if [ -d "$rootfs/usr/libexec/rpcd" ]; then
+    find "$rootfs/usr/libexec/rpcd" -type f -exec chmod 0755 {} +
+  fi
+  if [ -f "$rootfs/etc/dropbear/authorized_keys" ]; then
+    chmod 0600 "$rootfs/etc/dropbear/authorized_keys"
+  fi
 
-(
-  cd "$ROOTFS"
-  find . \( -type f -o -type l \) -printf '/%P\n' | sort >"$ROOTFS/lib/apk/packages/${PKG_NAME}.list"
-)
+  (
+    cd "$rootfs"
+    find . \( -type f -o -type l \) -printf '/%P\n' | sort >"$rootfs/lib/apk/packages/${PKG_NAME}.list"
+  )
 
-cat >"$SCRIPTS/post-install" <<EOF
+  cat >"$scripts/post-install" <<EOF
 #!/bin/sh
 [ "\${IPKG_NO_SCRIPT}" = "1" ] && exit 0
 [ -s "\${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0
@@ -46,20 +51,24 @@ export root="\${IPKG_INSTROOT}"
 export pkgname="${PKG_NAME}"
 add_group_and_user
 default_postinst
-[ -n "\${IPKG_INSTROOT}" ] || {
+EOF
+  if [ -d "$rootfs/usr/libexec/rpcd" ]; then
+    cat >>"$scripts/post-install" <<'EOF'
+[ -n "${IPKG_INSTROOT}" ] || {
 	/etc/init.d/rpcd restart >/dev/null 2>&1 || true
 	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 }
-exit 0
 EOF
+  fi
+  echo 'exit 0' >>"$scripts/post-install"
 
-{
-  echo "#!/bin/sh"
-  echo "export PKG_UPGRADE=1"
-  sed '/^\s*#!/d' "$SCRIPTS/post-install"
-} >"$SCRIPTS/post-upgrade"
+  {
+    echo "#!/bin/sh"
+    echo "export PKG_UPGRADE=1"
+    sed '/^\s*#!/d' "$scripts/post-install"
+  } >"$scripts/post-upgrade"
 
-cat >"$SCRIPTS/pre-deinstall" <<EOF
+  cat >"$scripts/pre-deinstall" <<EOF
 #!/bin/sh
 [ -s "\${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0
 . "\${IPKG_INSTROOT}/lib/functions.sh"
@@ -68,35 +77,40 @@ export pkgname="${PKG_NAME}"
 default_prerm
 EOF
 
-chmod 0755 "$SCRIPTS/post-install" "$SCRIPTS/post-upgrade" "$SCRIPTS/pre-deinstall"
+  chmod 0755 "$scripts/post-install" "$scripts/post-upgrade" "$scripts/pre-deinstall"
 
-APK_PATH="$OUT_DIR/$APK_NAME"
-rm -f "$APK_PATH"
+  local apk_path="$OUT_DIR/$apk_name"
+  rm -f "$apk_path"
 
-cat >"$TMP/mkpkg.sh" <<EOF
+  cat >"$tmp/mkpkg.sh" <<EOF
 #!/bin/sh
-# --sign-key is a global apk option and must precede the sub-command.
 exec "$APK" ${SIGN_KEY:+--sign-key "$SIGN_KEY"} mkpkg \\
   --info "name:${PKG_NAME}" \\
-  --info "version:${PKG_VER}" \\
-  --info "description:Freifunk Jena node onboard wizard (hostname, shared root password, location)" \\
+  --info "version:${pkg_ver}" \\
+  --info "description:${PKG_TITLE}" \\
   --info "arch:noarch" \\
-  --info "license:AGPL-3.0-or-later" \\
-  --info "maintainer:Freifunk Jena" \\
+  --info "license:${PKG_LICENSE}" \\
+  --info "maintainer:${PKG_MAINTAINER}" \\
   --info "tags:openwrt:section=lime" \\
-  --info "depends:${DEPENDS}" \\
-  --script "post-install:${SCRIPTS}/post-install" \\
-  --script "post-upgrade:${SCRIPTS}/post-upgrade" \\
-  --script "pre-deinstall:${SCRIPTS}/pre-deinstall" \\
-  --files "${ROOTFS}" \\
-  --output "${APK_PATH}"
+  --info "depends:${PKG_DEPENDS_APK}" \\
+  --script "post-install:${scripts}/post-install" \\
+  --script "post-upgrade:${scripts}/post-upgrade" \\
+  --script "pre-deinstall:${scripts}/pre-deinstall" \\
+  --files "${rootfs}" \\
+  --output "${apk_path}"
 EOF
-chmod 0755 "$TMP/mkpkg.sh"
+  chmod 0755 "$tmp/mkpkg.sh"
 
-if command -v fakeroot >/dev/null 2>&1; then
-  fakeroot -- "$TMP/mkpkg.sh"
-else
-  "$TMP/mkpkg.sh"
-fi
+  if command -v fakeroot >/dev/null 2>&1; then
+    fakeroot -- "$tmp/mkpkg.sh"
+  else
+    "$tmp/mkpkg.sh"
+  fi
 
-echo "Built $APK_PATH"
+  rm -rf "$tmp"
+  echo "Built $apk_path"
+}
+
+for dir in $(pkg_dirs "$ROOT"); do
+  build_apk "$dir"
+done
